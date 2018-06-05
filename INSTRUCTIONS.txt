@@ -1,0 +1,337 @@
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+Overview
+-------------------------------------------------------
+
+This file lists information about how to run the algorithms listed in the paper describing RedThread, and how to read the results. Algorithms and supporting code are located in the RedThread/source folder. Algorithms are run by calling the RedThread/source/runScript.py function, passing arguements to specify the algorithm, dataset, and run parameters (such as query budget, etc.) via stdin. By default, results are stored in the RedThread/resultStorage folder - this can be changed by editting the RedThread/source/nameOfFolderToSaveResultsTo.py file. 
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+Required Packages In Order To Run Algorithms
+-------------------------------------------------------
+This code was run with the following versions of packages:
+
+numpy 1.11.2
+scipy 0.18.1
+Python 2.7.5
+
+This code is also required to run inside of an active git repository.
+The version of git used was:
+git version 1.8.3.1
+
+This code was designed and used on linux-based systems. No guarentee is made for use on other platforms.
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+How To Run The Experiments (for examples, see  the section "Commands to replicate runs presented in the paper for the public datasets" below)
+-------------------------------------------------------
+
+After navigating into the RedThread/source folder, the code is run by passing commands via stdin to the file runScript.py, for example:
+    echo <command string> | python runScript.py
+The command string is a list of key-value pairs that are comma-delimited: the keys do not need to occur in any particular order. The keys are:
+    algorithmName:<value1>,algorithmParameters:<value2>,queryBudget:<value3>,datasetName:<value4>,seedNodesType:<value5>,typeOfRun:<value6>
+Description:
+    algorithmName:
+        This is names the algorithm to be run, and can take one of the following
+        values:
+            AlgorithmRandom
+            AlgorithmSimpleRandomWalk
+            AlgorithmWeightedRandomWalk
+            AlgorithmRedThreadWithoutFeedback
+            AlgorithmRedThreadWithoutEvidenceWeights
+            AlgorithmRedThread
+            AlgorithmRedThreadWithoutModalityParameters
+            AlgorithmRedThreadWithoutParameters 
+        This list can also be found in the file:
+            RedThread/source/runScriptInputParameters.py
+        which is where the algorithm names are translated into the instances
+        of the algorithms to run.
+
+    algorithmParameters:
+        This is a list of key-value pairs that are underscore-delimited: keys
+        do not need to occur in any particular order. Different algorithms
+        may have different parameters - details are listed in the subsection
+        "Algorithm Parameters" below.
+    
+    queryBudget:
+        This is the maximum number of times for a given seed node than an 
+        algorithm may recieve a label for a node it returns. This must be a
+        non-negative integer.
+
+    datasetName:
+        The name of the dataset to use. This must match one of the keys listed
+        in the dictionary:
+            datasetsToUseDict
+        located in the file:
+            RedThread/source/runScriptInputParameters.py
+        Details for specifying new datasets can be found in the section "How To 
+        Add Datasets so that Algorithms Can Run on Them" below.
+
+    seedNodesType:
+        This parameter specifies the seed-node file to use. The value
+        provided must match one of the keys listed in the dictionary:
+           dictMappingAlgoNameToDictMappingSeedNodeDescriptionToSeedNodeFilePath[<datasetName>]
+        in the file:
+            RedThread/source/runScriptInputParameters.py
+        where <datasetName> is the value specified for the datasetName parameter
+        passed in. Currently, "normal" is the only available value of this
+        parameter. The intent of this parameter is to allow experimentation
+        with multiple different seed node sets without having to manual change
+        data files or paths.
+
+   typeOfRun:
+        This parameter essentially specifies whether the dataset being used is a
+        human trafficking dataset or not, and in the case it is, whether or not
+        a high-confidence matcher should be used. Technically, this parameter
+        can take one of the following values, but users of this code other 
+        than the authors should only use the nonHT setting - the authors do not
+        guarentee support for other users to be able to seamlessly use any other
+        setting.
+           "nonHT":
+               The dataset is not a human trafficking dataset. The algorithms
+               will be restricted to returning at most queryBudget many nodes
+               per seed node. 
+           "HT_noHCM" :
+               The dataset used is a human trafficking dataset, but we will
+               not use a high-confidence matcher. That is, the algorithm will
+               be allowed to return more than queryBudget many nodes, but it 
+               will not be allowed to return more than queryBudget nodes which
+               we deem to *not* be near-duplicates. As always, the number of
+               nodes for which the algorithm recieves labels for a given seed
+               node is no more than queryBudget; the only additional nodes
+               an algorithm may return are ones we deem to be near-duplicates,
+               for which the algorithm recieves no label and no credit for.
+           "HT_HCM":
+               Similar to the HT_noHCM setting, this setting (HT_HCM) indicates
+               that the dataset in use is a human trafficking dataset and that 
+               a near-duplicate detector will be used to filter out nodes that
+               algorithms return which are very similar to other known positives.
+               Unlike the HT_noHCM setting, however, a high-confidence matcher
+               will be used to query the node node. Node returned by the
+               algorithm are subsequently put into three categories:
+               near-duplicates (we'll abbrevaite as ND here), 
+               high-confidence matches (HCM), and non-near-duplicate-non-high-confidence-matches (nonHCM).
+               When the algorithm returns a node, first it is run through
+               the near duplicate detector, then, if it is not a near-duplicate,
+               it is run through the high-confidence matcher, and finally, if
+               it is not a high-confidence matcher, we query the user / query
+               the ground-truth. The algorithm does not recieve credit for
+               ND nodes, it does receive credit for finding HCM nodes but does
+               not revieve labels for finding them (i.e., after the algorithm
+               is finished, we count if it found HCM nodes that were positive, 
+               but we do not tell the algorithm as it runs if an HCM node is
+               positive or negative), and the algorithm recieves both credit
+               and labels for nonHCM nodes. At most queryBudget many nonHCM
+               nodes may be returned.
+                 
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+Algorithm Parameters
+-------------------------------------------------------
+
+Below is listed the algorithm available to run and thier parameters callable from the command line. The mechanisms used to extract the parameters, etc., can be seen in the parseInputParameters function present in the algorithm files at RedThread/source/Algorithms/ and some in the function getRestOfAlgorithmParametersUsedInPaper in RedThread/source/runScriptInputParameters.py. As mention above, algorithm parameters are fed into the runsScript.py as a substring of the command string, and in the following format:
+    algorithmParameters:<key1>:<value1>_<key2>:<value2>_....<keyN>:<valueN>
+Keys do not need to be listed in any particular order. 
+List of algorithms and thier callable parameters:
+    AlgorithmRandom:
+        queueSize: 
+            As used in paper, was set to 1000. For the random algorithm, this 
+            parameter does not actually effect anything since the algorithm 
+            does not internally use a queue.
+    AlgorithmSimpleRandomWalk
+        queueSize:    
+            As used in paper, was set to 1000. For the simple randome walk,
+            this parameter does not actually effect anything since the algorithm
+            does not internally use a queue.
+    AlgorithmWeightedRandomWalk
+        queueSize:    
+            As used in paper, was set to 1000. For the weighted random walk,
+            this parameter does not actually effect anything since the algorithm
+            does not internally use a queue.
+    AlgorithmRedThreadWithoutFeedback
+        queueSize:    
+            As used in paper, was set to 1000.
+    AlgorithmRedThreadWithoutEvidenceWeights
+        clearWeightsWithNewSeedNode:
+            This is either 0.0 or 1.0, where 0.0 indicates that we retain the
+            modality weights learned going from one seed node to another, while
+            1.0 indicates that the modality weights are restored to uniform for
+            each new seed node.
+        learningRate:
+            As used in the paper, this was set to 0.3
+        queueSize:
+            As used in paper, this was set to 1000
+    AlgorithmRedThreadWithoutModalityParameters
+        queueSize:
+            As used in paper, this was set to 1000
+    AlgorithmRedThreadWithoutParameters
+        queueSize:
+            As used in paper, this was set to 1000 
+    AlgorithmRedThread
+        clearWeightsWithNewSeedNode:
+            This is either 0.0 or 1.0, where 0.0 indicates that we retain the
+            modality weights learned going from one seed node to another, while
+            1.0 indicates that the modality weights are restored to uniform for
+            each new seed node.
+        learningRate:
+            As used in the paper, this was set to 0.3
+        queueSize:
+            As used in paper, this was set to 1000 
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+How To Add Datasets so that Algorithms Can Run on Them
+-------------------------------------------------------
+
+The path to datafiles and the name under which the code should recognize them is specified in the file:
+    source/runScriptInputParameters.py
+in the dictionaries:
+    datasetsToUseDict
+    dictMappingAlgoNameToDictMappingSeedNodeDescriptionToSeedNodeFilePath
+In order to add a new datafile to run:
+    (1) add an entry to datasetsToUseDict listing the name to call the dataset by
+        (as the key) and the path to the data as the value (see the subsection
+        "Expected Data Format" below for details on the data expected).
+    (2) add an entry to dictMappingAlgoNameToDictMappingSeedNodeDescriptionToSeedNodeFilePath
+        (2a) The key used for this dictionary should match the one used for 
+             datasetsToUseDict.
+        (2b) The value should be a dictionary mapping names for seed node files
+             to the path of the seed nodes one desires to use. See the description
+             of the seedNodesType parameter in the section "How To Run The
+             Experiments" for more detail.
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+Expected Data Format
+-------------------------------------------------------
+We expect the following files to be located in the top-level of a single folder,
+the path to whom would be specified by the path provided in the dictionary
+datasetsToUseDict. They are in expected to be in the typical csv format:
+different records are delimited by newlines and fields within a record are
+delimited by commas.
+    groundTruthNodeLabels.csv
+        A two column file, where the first column is the name of a target node
+        and the second column is the "class label" of the node. A single node
+        might appear multiple times with different values listed in the
+        second field on different lines; the values in the second field for a
+        single target node correspond to the members of the classes to which
+        the node in question belongs.
+            For RedThread and its variations, positives are nodes which have
+        class labels that are non-disjiont with the class labels of the seed
+        node and which have a path to the seed node in the graph such that each
+        target entity on the path is positive.
+            Any node that is not listed in the groundTruthNodeLabels.csv file is
+        considered negative.
+    nodeAttributeFile.csv
+        A two column file, where the first column is the name of a node and the
+        second column is the entity type of the node.
+    seedNodes.csv (this can be located in an alternate directory by specifying
+            the path in dictMappingAlgoNameToDictMappingSeedNodeDescriptionToSeedNodeFilePath)
+        A single column file where each record lists a seed node to be used in
+        experiments. The seed nodes are used in reverse order of how they are
+        listed in this file, i.e., the bottom seed is first, and the top seed
+        is last.
+    weightedAdjacencyList.csv
+        A three column file where the first two columns list nodes that are
+        adjacent in the graph. The third column is not used in processing and
+        only present for compatability with various versions of other code
+        (not included in the software release for RedThread) designed to read
+        it. We expect the third column to be the constant value: 1
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+How To Change The Location Where Results Are Saved
+-------------------------------------------------------
+
+As noted in the overview, the file RedThread/source/nameOfFolderToSaveResultsTo.py determines where the results for the algorithm are saved. This file contains a path variable that can be changed as desired. Currently, the code is set to save content at RedThread/resultStorage , so as to require less set-up from first-time users in order to us the code.
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^ 
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+How To Read Data Into A (Postgresql) database
+-------------------------------------------------------
+
+This code produces a series of sql files containing the results for the experiment runs. These can be read into a posgres database by using the \i command in the database terminal after creating the relavent tables. The script to create the relavent tables is located at RedThread/source/createTables.sql
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V
+How To Produce The List of Positives And Negatives For Each Run
+-------------------------------------------------------
+
+After loading the data into a (Postgresql) database (see the section "How To Read Data Into A (Postgresql) database" above), run the script helper_collectResultsForEachUUID.sql , found in the source subdirectory. 
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
+
+
+V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~V~~V~V~V
+Commands to replicate runs presented in the paper for the public datasets.
+-------------------------------------------------------
+
+After navigating to the RedThread/source , run the below-listed commands to reproduce the results listed in the paper on the public datasets.
+
+# Memetracker, not resetting for each seed node
+echo algorithmName:AlgorithmRandom,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmWeightedRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmSimpleRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutEvidenceWeights,algorithmParameters:clearWeightsWithNewSeedNode:0.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutFeedback,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutModalityParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThread,algorithmParameters:clearWeightsWithNewSeedNode:0.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+
+# Memetracker, resetting for each seed node
+echo algorithmName:AlgorithmRandom,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmWeightedRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmSimpleRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutEvidenceWeights,algorithmParameters:clearWeightsWithNewSeedNode:1.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutFeedback,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutModalityParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThread,algorithmParameters:clearWeightsWithNewSeedNode:1.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:memeTracker,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+
+----------------------------------------------------------
+
+# Discogs, not resetting for each seed node
+echo algorithmName:AlgorithmRandom,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmWeightedRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmSimpleRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutEvidenceWeights,algorithmParameters:clearWeightsWithNewSeedNode:0.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutFeedback,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutModalityParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThread,algorithmParameters:clearWeightsWithNewSeedNode:0.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+
+# Discogs, resetting for each seed node
+echo algorithmName:AlgorithmRandom,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmWeightedRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmSimpleRandomWalk,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutEvidenceWeights,algorithmParameters:clearWeightsWithNewSeedNode:1.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutFeedback,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThreadWithoutModalityParameters,algorithmParameters:queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+echo algorithmName:AlgorithmRedThread,algorithmParameters:clearWeightsWithNewSeedNode:1.0_learningRate:0.3_queueSize:1000,queryBudget:40,datasetName:discogs,seedNodesType:normal,typeOfRun:nonHT | python runScript.py
+
+^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^_^
+
